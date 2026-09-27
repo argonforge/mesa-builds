@@ -1,4 +1,4 @@
-name: Build Mesa with optimizations
+name: Build Mesa for Devuan stable v3
 
 on:
   workflow_dispatch:
@@ -14,13 +14,13 @@ on:
 env:
   MESA_VERSION: '25.0.7'
   PACKAGE_VERSION: '25.0.7-2+deb13u1'
-  OPT_FLAGS: '-march=x86-64-v4 -mtune=znver4 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32'
+  OPT_FLAGS: '-march=x86-64-v3 -mtune=znver3 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32'
 
 jobs:
   build-deb:
     runs-on: self-hosted
     container:
-      image: devuan/devuan:excalibur
+      image: nafigat0r/devuan:6-dev
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
@@ -40,17 +40,6 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Using tag: $TAG"
-
-      - name: Install build dependencies
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          echo "deb     http://mirror.yandex.ru/mirrors/devuan/merged excalibur main" > /etc/apt/sources.list
-          echo "deb-src http://mirror.yandex.ru/mirrors/devuan/merged excalibur main" >> /etc/apt/sources.list
-          echo "deb     http://mirror.yandex.ru/mirrors/devuan/merged excalibur-updates main" >> /etc/apt/sources.list
-          echo "deb-src http://mirror.yandex.ru/mirrors/devuan/merged excalibur-updates main" >> /etc/apt/sources.list
-          apt update
-          apt install -y --no-install-recommends \
-            build-essential devscripts equivs ca-certificates zstd
 
       - name: Download Mesa source
         run: |
@@ -107,8 +96,8 @@ jobs:
 
       - name: Make archives
         run: |
-          tar -caf "mesa-${GITHUB_REF_NAME}.tar.zst" "packages"
-          tar -caf "mesa-${GITHUB_REF_NAME}-dev.tar.zst" "dev-packages"
+          tar -caf "mesa-${GITHUB_REF_NAME}-x86-64-v3.tar.zst" "packages"
+          tar -caf "mesa-${GITHUB_REF_NAME}-dev-x86-64-v3.tar.zst" "dev-packages"
 
       - name: Upload .deb packages as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -116,35 +105,3 @@ jobs:
           name: mesa-deb-packages
           path: ./*.zst
           retention-days: 5
-
-  release:
-    needs: build-deb
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: mesa-deb-packages
-          path: .
-
-      - name: Create release and upload packages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.build-deb.outputs.tag }}
-        run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — uploading files"
-            gh release upload "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber \
-              ./*.zst
-          else
-            echo "Creating release $TAG"
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Mesa ${MESA_VERSION} (x86-64-v4) (${TAG})" \
-              --latest \
-              ./*.zst
-          fi
