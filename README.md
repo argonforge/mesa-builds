@@ -1,6 +1,6 @@
-# Mesa x86-64-v4 for Devuan (stable)
+# Mesa for Devuan Excalibur (Debian Trixie base)
 
-Optimized Mesa (video driver) packages for Devuan Excalibur, built with `-march=x86-64-v4 -O3`.
+Optimized Mesa (video driver) packages for Devuan Excalibur, built for modern CPUs.
 
 Packages are built automatically via GitHub Actions inside a clean `devuan/devuan:excalibur` Docker container and published in the [Releases](../../releases) section.
 
@@ -8,19 +8,20 @@ Packages are built automatically via GitHub Actions inside a clean `devuan/devua
 
 - **Distribution:** Devuan Excalibur (stable)
 - **Architecture:** amd64
-- **CPU:** with **AVX-512** support (x86-64-v4)
-  - AMD Zen 4 (Ryzen 7000/8000/9000)
-- **GPU:** AMD (RDNA 1/2/3/4) — tested on Radeon 780M (Phoenix)
+- **CPU:** x86-64-v3 (AVX2) or x86-64-v4 (AVX-512) — pick the matching variant
 
-**Packages will not run** on CPUs without AVX-512. Check support:
+**Packages will not run** on CPUs without AVX2/AVX-512. Check support:
 
 ```bash
-grep -o 'avx512[a-z]*' /proc/cpuinfo | sort -u | head
+grep -o 'avx[0-9_]*' /proc/cpuinfo | sort -u
 ```
 
 If the output is empty — **do not install these packages**.
 
 ## Packages
+
+<details>
+<summary>Package list</summary>
 
 | Package | Purpose |
 |---|---|
@@ -36,14 +37,20 @@ If the output is empty — **do not install these packages**.
 | `mesa-vdpau-drivers` | VDPAU (hardware video decoding) |
 
 Debug packages (`*-dbgsym`) are **not included** in releases — they do not affect performance and only take up space.
+</details>
 
 ## Installation
 
-### 1. Download packages from the latest release
+### 1. Download and extract
 
 ```bash
 mkdir -p ~/mesa-opt && cd ~/mesa-opt
-gh release download --repo nafigator/mesa-optimized --pattern '*.zst'
+gh release download --repo argonforge/mesa-optimized --pattern '*.zst'
+
+# Pick ONE:
+tar --zstd -xf mesa-*-x86-64-v4.tar.zst   # AVX-512 (Zen 4/5)
+# or
+tar --zstd -xf mesa-*-x86-64-v3.tar.zst   # AVX2 (Zen 1/2/3)
 ```
 
 Or download the `.zst` files manually from the [Releases](../../releases) page.
@@ -59,8 +66,7 @@ sudo cp /var/cache/apt/archives/mesa-*.deb /root/mesa-backup/ 2>/dev/null || tru
 ### 3. Install
 
 ```bash
-cd ~/mesa
-tar --zstd -xf mesa-*.tar.zst
+cd ~/mesa-opt
 sudo apt install ./packages/*.deb
 ```
 
@@ -70,14 +76,7 @@ The `./` prefix is required — otherwise `apt` will look for packages in reposi
 
 ### 4. Hold versions
 
-To prevent `apt upgrade` from reverting to stock packages:
-
-```bash
-sudo apt-mark hold \
-  mesa-libgallium mesa-vulkan-drivers libgl1-mesa-dri \
-  libglx-mesa0 libegl-mesa0 libgbm1 libosmesa6 \
-  libxatracker2 mesa-va-drivers mesa-vdpau-drivers
-```
+To prevent `apt upgrade` from reverting to stock packages. See [Hold & Rollback](#hold--rollback)
 
 ### 5. Reboot
 
@@ -104,21 +103,22 @@ driverName = radv
 driverInfo = Mesa 25.0.7-2+deb13u1
 ```
 
-## Rollback
-
-If graphics become unstable, freeze, or show artifacts:
+## Hold & Rollback
 
 ```bash
+MESA_PKGS="libd3dadapter9-mesa libegl-mesa0 libgbm1 libgl1-mesa-dri \
+  libglx-mesa0 libosmesa6 libxatracker2 mesa-drm-shim mesa-libgallium \
+  mesa-opencl-icd mesa-va-drivers mesa-vdpau-drivers mesa-vulkan-drivers"
+
+# Hold
+sudo apt-mark hold $MESA_PKGS
+
+# If graphics become unstable, freeze, or show artifacts:
 # Unhold
-sudo apt-mark unhold \
-  mesa-libgallium mesa-vulkan-drivers libgl1-mesa-dri \
-  libglx-mesa0 libegl-mesa0 libgbm1 libosmesa6 \
-  libxatracker2 mesa-va-drivers mesa-vdpau-drivers
+sudo apt-mark unhold $MESA_PKGS
 
 # Reinstall stock versions
-sudo apt install --reinstall \
-  mesa-libgallium mesa-vulkan-drivers libgl1-mesa-dri \
-  libglx-mesa0 libegl-mesa0 libgbm1
+sudo apt install --reinstall $MESA_PKGS
 
 sudo reboot
 ```
@@ -131,28 +131,26 @@ sudo reboot
 | Shader compilation (ACO) | **0%** | ACO does not use Mesa build flags |
 | Games on iGPU (Radeon 780M) | ~0–2% | Bottleneck is memory bandwidth |
 
-**Honest warning:** do not expect a "magic" speedup. The main benefit of these packages is not FPS but more efficient CPU usage in scenarios where the driver is CPU-bound (high FPS, many draw calls). For Radeon 780M the main limiter is memory, not driver code.
-
-## How It Is Built
-
-GitHub Actions workflow:
-
-1. Starts the `devuan/devuan:excalibur` container.
-2. Installs `build-essential`, `devscripts`, `equivs`, `quilt`.
-3. Downloads `mesa-vulkan-drivers` source via `apt source`.
-4. Installs build dependencies via `mk-build-deps`.
-5. Applies Debian patches via `quilt push -a`.
-6. Adds `-Dc_args="-march=x86-64-v4 -mtune=znver4 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32"` and `-Dcpp_args="-march=x86-64-v4 -mtune=znver4 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32"` to `debian/rules`.
-7. Builds packages via `dpkg-buildpackage -b -us -uc`.
-8. Uploads `.deb` files as artifacts and to the release.
+**Honest note:** the gain is small and mostly matters in CPU-bound scenarios. For iGPU (Radeon 780M) memory bandwidth is the bottleneck, not driver code.
 
 Source workflow: [`.github/workflows/build-mesa.yml`](.github/workflows/build-mesa.yml).
+
+## Companion projects
+
+For a complete optimized graphics stack on **AMD Zen (x86-64-v3/v4)**:
+
+| Project | Purpose |
+|---|---|
+| [`gamescope-builds`](https://github.com/argonforge/gamescope-builds) | Micro-compositor for game scaling |
+| [`dxvk-builds`](https://github.com/argonforge/dxvk-builds) | DXVK (D3D9/10/11 → Vulkan) |
+| [`vkd3d-proton-builds`](https://github.com/argonforge/vkd3d-proton-builds) | VKD3D-Proton (D3D12 → Vulkan) |
+| [`wine-builds`](https://github.com/argonforge/wine-builds) | Wine WoW64 (Clang) |
 
 ## Important
 
 - Packages are built **only for Devuan Excalibur**. Installing on Daedalus (oldstable) or other releases may break graphics.
 - Packages are **not signed**. Verify integrity using SHA-256 from the release description.
-- **Do not install** these packages if you are unsure about AVX-512 support on your CPU.
+- **Do not install v4 packages** if you are unsure about AVX-512 support. Use v3 if your CPU has only AVX2.
 - The author is not responsible for any system issues. Always have a Live USB ready for recovery.
 
 ## License
