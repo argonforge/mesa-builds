@@ -1,12 +1,12 @@
-name: Build Mesa for Devuan stable v3
+name: Build Mesa for Devuan stable
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag name for release (leave empty to auto-generate)'
-        required: false
-        default: ''
+        description: 'Tag name (must match Devuan package ver)'
+        required: true
+        default: 'v25.0.7-2+deb13u1'
   push:
     tags:
       - "v*.*.*"
@@ -14,32 +14,30 @@ on:
 env:
   MESA_VERSION: '25.0.7'
   PACKAGE_VERSION: '25.0.7-2+deb13u1'
-  OPT_FLAGS: '-march=x86-64-v3 -mtune=znver3 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32'
+  TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  build-deb:
+  build:
+    strategy:
+      matrix:
+        include:
+          - ver: v3
+            flags: '-march=x86-64-v3 -mtune=znver3 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32'
+          - ver: v4
+            flags: '-march=x86-64-v4 -mtune=znver4 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32'
     runs-on: self-hosted
+    timeout-minutes: 30
     container:
       image: nafigat0r/devuan:6-dev
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+    env:
+      OPT_FLAGS: ${{ matrix.flags }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Determine release tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            TAG="${GITHUB_REF_NAME}"
-          else
-            TAG="${{ inputs.tag }}"
-            if [ -z "$TAG" ]; then
-              TAG="v${MESA_VERSION}-$(date -u +%Y%m%d)-$(echo "${GITHUB_SHA}" | cut -c1-7)"
-            fi
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Using tag: $TAG"
 
       - name: Download Mesa source
         run: |
@@ -66,8 +64,8 @@ jobs:
           cd mesa-${{ env.MESA_VERSION }}
           dh_clean
           rm -rf build obj-*
-          # noautodbgsym — don't make dbgsym-packages
-          # noddebs — don't make .ddeb
+          # noautodbgsym - don't make dbgsym-packages
+          # noddebs - don't make .ddeb
           export DEB_BUILD_OPTIONS="noautodbgsym noddebs"
           dpkg-buildpackage -b -us -uc
           # copy packages
@@ -86,6 +84,11 @@ jobs:
 
       - name: Verify no dbgsym packages
         run: |
+          if [ -z "$(ls -A packages/ 2>/dev/null)" ]; then
+            echo "ERROR: packages/ is empty - dpkg-buildpackage produced no .deb"
+            exit 1
+          fi
+
           if ls packages/*dbgsym* packages/*ddeb* dev-packages/*dbgsym* dev-packages/*ddeb* 2>/dev/null; then
             echo "ERROR: dbgsym/ddeb packages found!"
             exit 1
@@ -96,12 +99,50 @@ jobs:
 
       - name: Make archives
         run: |
-          tar -caf "mesa-${GITHUB_REF_NAME}-x86-64-v3.tar.zst" "packages"
-          tar -caf "mesa-${GITHUB_REF_NAME}-dev-x86-64-v3.tar.zst" "dev-packages"
+          tar -caf "mesa-${TAG}-x86-64-${{ matrix.ver }}.tar.zst" "packages"
+          tar -caf "mesa-${TAG}-dev-x86-64-${{ matrix.ver }}.tar.zst" "dev-packages"
 
       - name: Upload .deb packages as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mesa-deb-packages-v3
+          name: mesa-deb-packages-${{ matrix.ver }}
           path: ./*.zst
           retention-days: 5
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release and upload packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -lh artifacts/
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - uploading files"
+            gh release upload "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber \
+              artifacts/*.zst
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Mesa ${MESA_VERSION} (${TAG})" \
+              --notes-file release-notes.md \
+              --latest \
+              artifacts/*.zst
+          fi

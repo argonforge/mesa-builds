@@ -8,7 +8,7 @@ Packages are built automatically via GitHub Actions inside a clean `devuan/devua
 
 - **Distribution:** Devuan Excalibur (stable)
 - **Architecture:** amd64
-- **CPU:** x86-64-v3 (AVX2) or x86-64-v4 (AVX-512) — pick the matching variant
+- **CPU:** x86-64-v3 (AVX2) or x86-64-v4 (AVX-512) - pick the matching variant
 
 **Packages will not run** on CPUs without AVX2/AVX-512. Check support:
 
@@ -16,7 +16,7 @@ Packages are built automatically via GitHub Actions inside a clean `devuan/devua
 grep -o 'avx[0-9_]*' /proc/cpuinfo | sort -u
 ```
 
-If the output is empty — **do not install these packages**.
+If the output is empty - **do not install these packages**.
 
 ## Packages
 
@@ -36,7 +36,7 @@ If the output is empty — **do not install these packages**.
 | `mesa-va-drivers` | VA-API (hardware video decoding) |
 | `mesa-vdpau-drivers` | VDPAU (hardware video decoding) |
 
-Debug packages (`*-dbgsym`) are **not included** in releases — they do not affect performance and only take up space.
+Debug packages (`*-dbgsym`) are **not included** in releases - they do not affect performance and only take up space.
 </details>
 
 ## Installation
@@ -45,12 +45,10 @@ Debug packages (`*-dbgsym`) are **not included** in releases — they do not aff
 
 ```bash
 mkdir -p ~/mesa-opt && cd ~/mesa-opt
-gh release download --repo argonforge/mesa-optimized --pattern '*.zst'
+gh release download --repo argonforge/mesa-builds --pattern '*.zst'
 
-# Pick ONE:
-tar --zstd -xf mesa-*-x86-64-v4.tar.zst   # AVX-512 (Zen 4/5)
-# or
-tar --zstd -xf mesa-*-x86-64-v3.tar.zst   # AVX2 (Zen 1/2/3)
+# Unpack archives matching your CPUs and needs:
+tar --zstd -xf <archive name>.tar.zst
 ```
 
 Or download the `.zst` files manually from the [Releases](../../releases) page.
@@ -70,7 +68,7 @@ cd ~/mesa-opt
 sudo apt install ./packages/*.deb
 ```
 
-The `./` prefix is required — otherwise `apt` will look for packages in repositories.
+The `./` prefix is required - otherwise `apt` will look for packages in repositories.
 
 `apt` may mark some packages as `DOWNGRADING` even though the version is the same. This is a replacement of the stock build with a local one, not an actual downgrade.
 
@@ -127,13 +125,13 @@ sudo reboot
 
 | Component | Gain | Comment |
 |---|---|---|
-| CPU part of driver (radeonsi/RADV) | 1–3% | Noticeable only in CPU-bound scenarios |
+| CPU part of driver (radeonsi/RADV) | 1-3% | Noticeable only in CPU-bound scenarios |
 | Shader compilation (ACO) | **0%** | ACO does not use Mesa build flags |
-| Games on iGPU (Radeon 780M) | ~0–2% | Bottleneck is memory bandwidth |
+| Games on iGPU (Radeon 780M) | ~0-2% | Bottleneck is memory bandwidth |
 
 **Honest note:** the gain is small and mostly matters in CPU-bound scenarios. For iGPU (Radeon 780M) memory bandwidth is the bottleneck, not driver code.
 
-Source workflow: [`.github/workflows/build-mesa.yml`](.github/workflows/build-mesa.yml).
+Source workflow: [`.github/workflows/build-devuan-stable.yml`](.github/workflows/build-devuan-stable.yml).
 
 ## Companion projects
 
@@ -142,8 +140,8 @@ For a complete optimized graphics stack on **AMD Zen (x86-64-v3/v4)**:
 | Project | Purpose |
 |---|---|
 | [`gamescope-builds`](https://github.com/argonforge/gamescope-builds) | Micro-compositor for game scaling |
-| [`dxvk-builds`](https://github.com/argonforge/dxvk-builds) | DXVK (D3D9/10/11 → Vulkan) |
-| [`vkd3d-proton-builds`](https://github.com/argonforge/vkd3d-proton-builds) | VKD3D-Proton (D3D12 → Vulkan) |
+| [`dxvk-builds`](https://github.com/argonforge/dxvk-builds) | DXVK (D3D9/10/11 -> Vulkan) |
+| [`vkd3d-proton-builds`](https://github.com/argonforge/vkd3d-proton-builds) | VKD3D-Proton (D3D12 -> Vulkan) |
 | [`wine-builds`](https://github.com/argonforge/wine-builds) | Wine WoW64 (Clang) |
 
 ## Important
@@ -159,6 +157,6 @@ The build scripts and GitHub Actions workflows in this repository
 are licensed under the MIT License. See LICENSE file.
 
 The Mesa source code and Debian packaging files are distributed
-under their respective licenses — see the mesa source package
+under their respective licenses - see the mesa source package
 for details. The compiled .deb packages in Releases are
 redistributions of Mesa under its original license.
