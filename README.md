@@ -21,18 +21,18 @@ If the output is empty - **do not install these packages**.
 <details>
 <summary>Package list</summary>
 
-| Package | Purpose |
-|---|---|
-| `mesa-libgallium` | Main Gallium library (radeonsi, RADV) |
-| `mesa-vulkan-drivers` | Vulkan drivers (RADV for AMD) |
-| `libgl1-mesa-dri` | DRI drivers for OpenGL |
-| `libglx-mesa0` | GLX library |
-| `libegl-mesa0` | EGL library |
-| `libgbm1` | GBM (buffers for Wayland/KMS) |
-| `libosmesa6` | Offscreen rendering |
-| `libxatracker2` | XA tracker (XvBA) |
-| `mesa-va-drivers` | VA-API (hardware video decoding) |
-| `mesa-vdpau-drivers` | VDPAU (hardware video decoding) |
+| Package               | Purpose                               |
+|-----------------------|---------------------------------------|
+| `mesa-libgallium`     | Main Gallium library (radeonsi, RADV) |
+| `mesa-vulkan-drivers` | Vulkan drivers (RADV for AMD)         |
+| `libgl1-mesa-dri`     | DRI drivers for OpenGL                |
+| `libglx-mesa0`        | GLX library                           |
+| `libegl-mesa0`        | EGL library                           |
+| `libgbm1`             | GBM (buffers for Wayland/KMS)         |
+| `libosmesa6`          | Offscreen rendering                   |
+| `libxatracker2`       | XA tracker (XvBA)                     |
+| `mesa-va-drivers`     | VA-API (hardware video decoding)      |
+| `mesa-vdpau-drivers`  | VDPAU (hardware video decoding)       |
 
 Debug packages (`*-dbgsym`) are **not included** in releases - they do not affect performance and only take up space.
 </details>
@@ -121,11 +121,11 @@ sudo reboot
 
 ## Expected Performance
 
-| Component | Gain | Comment |
-|---|---|---|
-| CPU part of driver (radeonsi/RADV) | 1-3% | Noticeable only in CPU-bound scenarios |
-| Shader compilation (ACO) | **0%** | ACO does not use Mesa build flags |
-| Games on iGPU (Radeon 780M) | ~0-2% | Bottleneck is memory bandwidth |
+| Component                          | Gain   | Comment                                |
+|------------------------------------|--------|----------------------------------------|
+| CPU part of driver (radeonsi/RADV) | 1-3%   | Noticeable only in CPU-bound scenarios |
+| Shader compilation (ACO)           | **0%** | ACO does not use Mesa build flags      |
+| Games on iGPU (Radeon 780M)        | ~0-2%  | Bottleneck is memory bandwidth         |
 
 **Honest note:** the gain is small and mostly matters in CPU-bound scenarios. For iGPU (Radeon 780M) memory bandwidth is the bottleneck, not driver code.
 
@@ -135,12 +135,12 @@ Source workflow: [`.github/workflows/build-devuan-stable.yml`](.github/workflows
 
 For a complete optimized graphics stack on **AMD Zen (x86-64-v3/v4)**:
 
-| Project | Purpose |
-|---|---|
-| [`gamescope-builds`](https://github.com/argonforge/gamescope-builds) | Micro-compositor for game scaling |
-| [`dxvk-builds`](https://github.com/argonforge/dxvk-builds) | DXVK (D3D9/10/11 -> Vulkan) |
-| [`vkd3d-proton-builds`](https://github.com/argonforge/vkd3d-proton-builds) | VKD3D-Proton (D3D12 -> Vulkan) |
-| [`wine-builds`](https://github.com/argonforge/wine-builds) | Wine WoW64 (Clang) |
+| Project                                                                    | Purpose                           |
+|----------------------------------------------------------------------------|-----------------------------------|
+| [`gamescope-builds`](https://github.com/argonforge/gamescope-builds)       | Micro-compositor for game scaling |
+| [`dxvk-builds`](https://github.com/argonforge/dxvk-builds)                 | DXVK (D3D9/10/11 -> Vulkan)       |
+| [`vkd3d-proton-builds`](https://github.com/argonforge/vkd3d-proton-builds) | VKD3D-Proton (D3D12 -> Vulkan)    |
+| [`wine-builds`](https://github.com/argonforge/wine-builds)                 | Wine WoW64 (Clang)                |
 
 ## Important
 
