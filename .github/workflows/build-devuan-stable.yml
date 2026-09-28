@@ -42,7 +42,7 @@ jobs:
       image: nafigat0r/devuan:6-dev
     env:
       OPT_FLAGS: ${{ matrix.flags }}
-      CCACHE_DIR: ${{ github.workspace }}/.ccache-${{ matrix.ver }}
+      CCACHE_DIR: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/.ccache-${{ matrix.ver }}
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
     steps:
