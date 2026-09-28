@@ -142,7 +142,7 @@ jobs:
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --title "Mesa ${MESA_VERSION} (${TAG})" \
-              --notes-file release-notes.md \
+              --notes-file .github/release-notes.md \
               --latest \
               artifacts/*.zst
           fi
