@@ -2,7 +2,7 @@
 
 Optimized Mesa (video driver) packages for Devuan Excalibur, built for modern CPUs.
 
-Packages are built automatically via GitHub Actions inside a clean `devuan/devuan:excalibur` Docker container and published in the [Releases](../../releases) section.
+Packages are built automatically via GitHub Actions inside a `nafigat0r/devuan:6-dev` Docker container and published in the [Releases](../../releases) section.
 
 ## Requirements
 
@@ -52,7 +52,7 @@ tar --zstd -xf <archive name>.tar.zst
 ```
 
 Or download the `.zst` files manually from the [Releases](../../releases) page.
-You can exclude `*dev*` packages if you don't need them.
+The `*dev*` archives are optional - skip them if you don't need development headers.
 
 ### 2. Back up current packages
 

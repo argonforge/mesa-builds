@@ -12,13 +12,15 @@ on:
       - "v*.*.*"
 
 env:
-  MESA_VERSION: '25.0.7'
-  PACKAGE_VERSION: '25.0.7-2+deb13u1'
   TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
 
 defaults:
   run:
     shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -26,9 +28,9 @@ jobs:
       matrix:
         include:
           - ver: v3
-            flags: '-march=x86-64-v3 -mtune=znver3 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32'
+            flags: -march=x86-64-v3 -mtune=znver3 ${{ vars.FLAGS }}
           - ver: v4
-            flags: '-march=x86-64-v4 -mtune=znver4 -O3 -fno-plt -fomit-frame-pointer -falign-functions=32 -falign-loops=32 -falign-jumps=32'
+            flags: -march=x86-64-v4 -mtune=znver4 ${{ vars.FLAGS }}
     runs-on: self-hosted
     timeout-minutes: 30
     container:
@@ -36,24 +38,31 @@ jobs:
     env:
       OPT_FLAGS: ${{ matrix.flags }}
     steps:
+      - name: Compute version variables
+        run: |
+          PACKAGE_VERSION="${TAG#v}"
+          MESA_VERSION="${PACKAGE_VERSION%-*}"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "MESA_VERSION=$MESA_VERSION" >> $GITHUB_ENV
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download Mesa source
         run: |
           apt update
-          apt source mesa-vulkan-drivers=${{ env.PACKAGE_VERSION }}
+          apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
 
       - name: Install build dependencies from control file
         run: |
-          cd mesa-${{ env.MESA_VERSION }}
+          cd mesa-${MESA_VERSION}
           mk-build-deps --install --remove \
             --tool 'apt-get -y --no-install-recommends' \
             debian/control
 
       - name: Patch debian/rules with optimization flags
         run: |
-          cd mesa-${{ env.MESA_VERSION }}
+          cd mesa-${MESA_VERSION}
           sed -i '/^override_dh_auto_configure:/i confflags += -Dc_args="${{ env.OPT_FLAGS }}" -Dcpp_args="${{ env.OPT_FLAGS }}"' debian/rules
           grep -B 1 '^override_dh_auto_configure:' debian/rules
 
@@ -61,7 +70,7 @@ jobs:
         run: |
           mkdir -p packages
           mkdir -p dev-packages
-          cd mesa-${{ env.MESA_VERSION }}
+          cd mesa-${MESA_VERSION}
           dh_clean
           rm -rf build obj-*
           # noautodbgsym - don't make dbgsym-packages
@@ -129,6 +138,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          MESA_VERSION="${TAG#v}"
+          MESA_VERSION="${MESA_VERSION%-*}"
           ls -lh artifacts/
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
