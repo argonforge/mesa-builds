@@ -189,6 +189,7 @@ jobs:
             echo "Creating release $TAG"
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
+              --target ${{ github.sha }} \
               --title "$TITLE" \
               --notes-file .github/release-notes.md \
               "${FLAGS[@]}" \

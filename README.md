@@ -1,8 +1,6 @@
 # Mesa for Devuan Excalibur (Debian Trixie base)
 
-Optimized Mesa (video driver) packages for Devuan Excalibur, built for modern CPUs.
-
-Packages are built automatically via GitHub Actions inside a `nafigat0r/devuan:6-dev` Docker container and published in the [Releases](../../releases) section.
+Optimized [Mesa](https://gitlab.freedesktop.org/mesa/mesa.git) (video driver) packages for Devuan Excalibur, built for modern CPUs.
 
 ## Requirements
 
