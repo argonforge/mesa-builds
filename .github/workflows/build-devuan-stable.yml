@@ -37,6 +37,9 @@ jobs:
       image: nafigat0r/devuan:6-dev
     env:
       OPT_FLAGS: ${{ matrix.flags }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache-${{ matrix.ver }}
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPRESS: 'true'
     steps:
       - name: Compute version variables
         run: |
@@ -47,6 +50,22 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Restore ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-mesa-${{ matrix.ver }}-${{ github.sha }}
+          restore-keys: |
+            ccache-mesa-${{ matrix.ver }}-
+
+      - name: Configure ccache
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --max-size="$CCACHE_MAXSIZE"
+          ccache --set-config=compression=true
+          ccache --set-config=compression_level=6
+          ccache -s
 
       - name: Download Mesa source
         run: |
@@ -62,6 +81,9 @@ jobs:
 
       - name: Patch debian/rules with optimization flags
         run: |
+          # Prepend ccache wrappers to PATH
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+
           cd mesa-${MESA_VERSION}
           sed -i '/^override_dh_auto_configure:/i confflags += -Dc_args="${{ env.OPT_FLAGS }}" -Dcpp_args="${{ env.OPT_FLAGS }}"' debian/rules
           grep -B 1 '^override_dh_auto_configure:' debian/rules
@@ -117,6 +139,10 @@ jobs:
           name: mesa-deb-packages-${{ matrix.ver }}
           path: ./*.zst
           retention-days: 5
+
+      - name: Show ccache stats
+        if: always()
+        run: ccache -s
 
   release:
     needs: build
