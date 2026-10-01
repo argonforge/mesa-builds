@@ -34,8 +34,10 @@ jobs:
         include:
           - ver: v3
             flags: -march=x86-64-v3 -mtune=znver3 ${{ vars.FLAGS }}
+            isa: avx2
           - ver: v4
             flags: -march=x86-64-v4 -mtune=znver4 ${{ vars.FLAGS }}
+            isa: avx512
     runs-on: self-hosted
     timeout-minutes: 30
     container:
@@ -93,6 +95,18 @@ jobs:
           sed -i '/^override_dh_auto_configure:/i confflags += -Dc_args="${{ env.OPT_FLAGS }}" -Dcpp_args="${{ env.OPT_FLAGS }}"' debian/rules
           grep -B 1 '^override_dh_auto_configure:' debian/rules
 
+      - name: Bump package version with ISA suffix
+        working-directory: mesa-${{ env.MESA_VERSION }}
+        env:
+          DEBEMAIL: postmaster@itvault.info
+          DEBFULLNAME: Argon Forge Mesa workflow
+        run: |
+          CURRENT_VER=$(dpkg-parsechangelog -S Version)
+          NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
+          echo "Original version: ${CURRENT_VER}"
+          echo "New version: ${NEW_VER}"
+          dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations"
+
       - name: Build .deb packages
         run: |
           mkdir -p packages
@@ -149,6 +163,87 @@ jobs:
         if: always()
         run: ccache -s
 
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install reprepro and gnupg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends reprepro gnupg
+
+      - name: Download artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Unpack deb files
+        run: |
+          mkdir -p build
+          for f in artifacts/*.tar.zst; do
+            echo "Extracting $f"
+            tar --zstd -xf "$f" -C build --strip-components=1
+          done
+          echo "--- .deb files in build/ ---"
+          find build -name '*.deb' -type f | sort
+
+      - name: Import GPG key
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 -p "$GNUPGHOME"
+          printf '%s' "$APT_SIGNING_KEY" | gpg --batch --no-tty --import
+          echo "--- Imported secret keys ---"
+          gpg --list-secret-keys
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Create APT repository
+        run: |
+          mkdir -p apt-repo/conf
+          cp .github/helpers/distributions apt-repo/conf/distributions
+
+          for deb in build/*+avx2_amd64.deb; do
+            [ -f "$deb" ] || continue
+            reprepro -Vb apt-repo -C main -A amd64 includedeb stable-avx2 "$deb"
+          done
+
+          for deb in build/*+avx512_amd64.deb; do
+            [ -f "$deb" ] || continue
+            reprepro -Vb apt-repo -C main -A amd64 includedeb stable-avx512 "$deb"
+          done
+
+          echo "--- Repository structure ---"
+          find apt-repo -type f | sort
+
+          echo "--- Export public key ---"
+          gpg --armor --export > apt-repo/public.asc
+          ls -lh apt-repo/public.asc
+
+      - name: Setup Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: apt-repo
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -174,7 +269,7 @@ jobs:
           FLAGS=(--latest)
           [[ $DRAFT = true ]] && FLAGS=(--draft)
 
-          TITLE="Mesa ${MESA_VERSION} (${TAG})"
+          TITLE="${MESA_VERSION} (Clang)"
           [[ $DRAFT = true ]] && TITLE="[DRAFT] $TITLE"
 
           ls -lh artifacts/

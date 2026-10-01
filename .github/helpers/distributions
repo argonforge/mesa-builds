@@ -1,0 +1,17 @@
+Origin: Argon Forge
+Label: Argon Forge
+Suite: stable-avx2
+Codename: stable-avx2
+Architectures: amd64
+Components: main
+Description: Mesa Argon Forge builds (AVX2)
+SignWith: default
+
+Origin: Argon Forge
+Label: Argon Forge
+Suite: stable-avx512
+Codename: stable-avx512
+Architectures: amd64
+Components: main
+Description: Mesa Argon Forge builds (AVX-512)
+SignWith: default
