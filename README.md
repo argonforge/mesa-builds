@@ -81,12 +81,30 @@ echo "deb [signed-by=/usr/share/keyrings/argonforge-mesa.gpg] https://argonforge
 
 ### 3. Install
 
+<details>
+<summary>APT command</summary>
+
 ```bash
 sudo apt update
-sudo apt install mesa-libgallium mesa-vulkan-drivers libgl1-mesa-dri
+sudo apt install \
+    mesa-libgallium \
+    mesa-vulkan-drivers \
+    libgl1-mesa-dri \
+    libglx-mesa0 \
+    libegl-mesa0 \
+    libgbm1 \
+    libosmesa6 \
+    libxatracker2 \
+    mesa-va-drivers \
+    mesa-vdpau-drivers \
+    libd3dadapter9-mesa \
+    mesa-drm-shim \
+    mesa-opencl-icd
 ```
 
 `apt` may mark the packages as `DOWNGRADING` if a newer version was installed from another source. This is expected - the Argon Forge build replaces the stock packages.
+
+</details>
 
 ### 4. Hold versions (recommended)
 
