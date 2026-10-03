@@ -165,7 +165,202 @@ jobs:
       - name: Upload .deb packages as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mesa-deb-packages-${{ matrix.ver }}
+          name: mesa-deb-packages-amd64-${{ matrix.ver }}
+          path: ./*.zst
+          retention-days: ${{ env.DRAFT == 'true' && 1 || 5 }}
+
+      - name: Show ccache stats
+        if: always()
+        run: ccache -s
+
+  build-i386:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ver: v3
+            flags: -march=x86-64-v3 -mtune=znver3 ${{ vars.FLAGS }}
+            isa: avx2
+          - ver: v4
+            flags: -march=x86-64-v4 -mtune=znver4 ${{ vars.FLAGS }}
+            isa: avx512
+    runs-on: self-hosted
+    timeout-minutes: 45
+    container:
+      image: devuan/devuan:excalibur
+    env:
+      OPT_FLAGS: ${{ matrix.flags }}
+      CCACHE_DIR: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/.ccache-i386-${{ matrix.ver }}
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPRESS: 'true'
+      CC: clang -m32
+      CXX: clang++ -m32
+      PKG_CONFIG_LIBDIR: /usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig
+    steps:
+      - name: Compute version variables
+        run: |
+          PACKAGE_VERSION="${TAG#v}"
+          MESA_VERSION="${PACKAGE_VERSION%-*}"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "MESA_VERSION=$MESA_VERSION" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Enable i386 architecture
+        run: |
+          echo "deb     http://mirror.yandex.ru/mirrors/devuan/merged excalibur main contrib" > /etc/apt/sources.list
+          echo "deb-src http://mirror.yandex.ru/mirrors/devuan/merged excalibur main contrib" >> /etc/apt/sources.list
+          echo "deb     http://mirror.yandex.ru/mirrors/devuan/merged excalibur-updates main contrib" >> /etc/apt/sources.list
+          echo "deb-src http://mirror.yandex.ru/mirrors/devuan/merged excalibur-updates main contrib" >> /etc/apt/sources.list
+          echo "deb     http://mirror.yandex.ru/mirrors/devuan/merged excalibur-security main contrib" >> /etc/apt/sources.list
+
+          dpkg --add-architecture i386
+          apt update
+
+      - name: Install i386 build dependencies
+        run: |
+          mkdir -p mesa-${MESA_VERSION}
+          cd mesa-${MESA_VERSION}
+          # Try apt-get build-dep first, fall back to manual list
+          if apt-get build-dep -y -a i386 mesa 2>/dev/null; then
+            echo "build-dep -a i386 succeeded"
+          else
+            echo "build-dep -a i386 failed, installing from manual list"
+            apt install -y --no-install-recommends \
+              ccache \
+              libdrm-dev:i386 libx11-dev:i386 libxext-dev:i386 \
+              libxfixes-dev:i386 libxxf86vm-dev:i386 libexpat1-dev:i386 \
+              libsensors-dev:i386 libva-dev:i386 libvdpau-dev:i386 \
+              libvulkan-dev:i386 libx11-xcb-dev:i386 libxcb-dri2-0-dev:i386 \
+              libxcb-glx0-dev:i386 libxcb-xfixes0-dev:i386 libxcb-dri3-dev:i386 \
+              libxcb-present-dev:i386 libxcb-randr0-dev:i386 libxcb-shm0-dev:i386 \
+              libxcb-sync-dev:i386 libxrandr-dev:i386 libxshmfence-dev:i386 \
+              libzstd-dev:i386 libelf-dev:i386 libwayland-dev:i386 \
+              libwayland-egl-backend-dev:i386 zlib1g-dev:i386 \
+              libglvnd-core-dev:i386 libgbm-dev:i386 libclc-19:i386 \
+              libclc-19-dev:i386 libllvmspirvlib-19-dev:i386 \
+              llvm-19-dev:i386 libclang-19-dev:i386 libclang-cpp19-dev:i386
+          fi
+
+      - name: Download Mesa source
+        run: |
+          apt update
+          apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
+
+      - name: Restore ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-mesa-i386-${{ matrix.ver }}-${{ github.sha }}
+          restore-keys: |
+            ccache-mesa-i386-${{ matrix.ver }}-
+
+      - name: Configure ccache
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --max-size="$CCACHE_MAXSIZE"
+          ccache --set-config=compression=true
+          ccache --set-config=compression_level=6
+          ccache -s
+
+      - name: Create i386 cross-file for Meson
+        run: |
+          cd mesa-${MESA_VERSION}
+          cat > /tmp/i386-cross.txt << 'EOF'
+          [binaries]
+          c = 'clang'
+          cpp = 'clang++'
+          ar = 'llvm-ar'
+          strip = 'llvm-strip'
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'x86'
+          cpu = 'i686'
+          endian = 'little'
+
+          [built-in options]
+          c_args = ['-m32']
+          cpp_args = ['-m32']
+          c_link_args = ['-m32']
+          cpp_link_args = ['-m32']
+          EOF
+          echo "--- i386-cross.txt ---"
+          cat /tmp/i386-cross.txt
+
+      - name: Patch debian/rules for i386 cross-build
+        run: |
+          cd mesa-${MESA_VERSION}
+          sed -i "/^override_dh_auto_configure:/i confflags += -Dc_args=\"${{ env.OPT_FLAGS }} -m32\" -Dcpp_args=\"${{ env.OPT_FLAGS }} -m32\"" debian/rules
+          sed -i "/^override_dh_auto_configure:/i confflags += --cross-file=/tmp/i386-cross.txt" debian/rules
+          grep -B 2 '^override_dh_auto_configure:' debian/rules
+
+      - name: Bump package version with ISA suffix
+        working-directory: mesa-${{ env.MESA_VERSION }}
+        env:
+          DEBEMAIL: postmaster@itvault.info
+          DEBFULLNAME: Argon Forge Mesa workflow
+        run: |
+          if [ ! -f debian/changelog ]; then
+            echo "ERROR: debian/changelog not found in $(pwd)"
+            exit 1
+          fi
+          CURRENT_VER=$(dpkg-parsechangelog -S Version)
+          if [ -z "$CURRENT_VER" ]; then
+            echo "ERROR: could not parse current version from debian/changelog"
+            exit 1
+          fi
+          NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
+          echo "Original version: ${CURRENT_VER}"
+          echo "New version: ${NEW_VER}"
+          dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations for i386"
+
+      - name: Build i386 .deb packages
+        run: |
+          mkdir -p packages
+          mkdir -p dev-packages
+          cd mesa-${MESA_VERSION}
+          dh_clean
+          rm -rf build obj-*
+          export DEB_BUILD_OPTIONS="noautodbgsym noddebs"
+          dpkg-buildpackage -b -us -uc -a i386
+          find .. -maxdepth 1 \
+            -name '*_i386.deb' \
+            ! -name '*dbgsym*' \
+            ! -name '*ddeb*' \
+            ! -name '*-dev_*' \
+            -exec mv {} ../packages/ \;
+          find .. -maxdepth 1 \
+            -name '*-dev_*_i386.deb' \
+            ! -name '*dbgsym*' \
+            ! -name '*ddeb*' \
+            -exec mv {} ../dev-packages/ \;
+
+      - name: Verify no dbgsym packages
+        run: |
+          if [ -z "$(ls -A packages/ 2>/dev/null)" ]; then
+            echo "ERROR: packages/ is empty - dpkg-buildpackage produced no .deb"
+            ls -lh ../*.deb 2>/dev/null || echo "no .deb files in parent"
+            exit 1
+          fi
+          if ls packages/*dbgsym* packages/*ddeb* dev-packages/*dbgsym* dev-packages/*ddeb* 2>/dev/null; then
+            echo "ERROR: dbgsym/ddeb packages found!"
+            exit 1
+          fi
+          echo "OK: no dbgsym packages"
+          ls -lh packages/
+          ls -lh dev-packages/
+
+      - name: Make archives
+        run: |
+          tar -caf "mesa-${TAG}-i386-${{ matrix.ver }}.tar.zst" "packages"
+          tar -caf "mesa-${TAG}-dev-i386-${{ matrix.ver }}.tar.zst" "dev-packages"
+
+      - name: Upload .deb packages as artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mesa-deb-packages-i386-${{ matrix.ver }}
           path: ./*.zst
           retention-days: ${{ env.DRAFT == 'true' && 1 || 5 }}
 
@@ -174,10 +369,10 @@ jobs:
         run: ccache -s
 
   publish:
-    needs: build
-    if: ${{ env.DRAFT != 'true' }}
+    needs: [build, build-i386]
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
       pages: write
@@ -226,14 +421,13 @@ jobs:
           mkdir -p apt-repo/conf
           cp .github/helpers/distributions apt-repo/conf/distributions
 
-          for deb in build/*+avx2_amd64.deb; do
-            [ -f "$deb" ] || continue
-            reprepro -Vb apt-repo -C main -A amd64 includedeb stable-avx2 "$deb"
-          done
-
-          for deb in build/*+avx512_amd64.deb; do
-            [ -f "$deb" ] || continue
-            reprepro -Vb apt-repo -C main -A amd64 includedeb stable-avx512 "$deb"
+          for arch in amd64 i386; do
+            for codename in stable-avx2 stable-avx512; do
+              for deb in build/*+${codename#stable-}_${arch}.deb; do
+                [ -f "$deb" ] || continue
+                reprepro -Vb apt-repo -C main -A ${arch} includedeb ${codename} "$deb"
+              done
+            done
           done
 
           echo "--- Repository structure ---"
@@ -256,7 +450,7 @@ jobs:
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
   release:
-    needs: build
+    needs: [build, build-i386]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
