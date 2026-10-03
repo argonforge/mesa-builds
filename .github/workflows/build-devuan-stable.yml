@@ -175,7 +175,7 @@ jobs:
 
   publish:
     needs: build
-    if: ${{ env.DRAFT != 'true' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
