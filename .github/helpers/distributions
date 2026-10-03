@@ -2,7 +2,7 @@ Origin: Argon Forge
 Label: Argon Forge
 Suite: stable-avx2
 Codename: stable-avx2
-Architectures: amd64
+Architectures: amd64 i386
 Components: main
 Description: Mesa Argon Forge builds (AVX2)
 SignWith: 124A5F2648205EE9362AD4048C0D94B20ED04688
@@ -11,7 +11,7 @@ Origin: Argon Forge
 Label: Argon Forge
 Suite: stable-avx512
 Codename: stable-avx512
-Architectures: amd64
+Architectures: amd64 i386
 Components: main
 Description: Mesa Argon Forge builds (AVX-512)
 SignWith: 124A5F2648205EE9362AD4048C0D94B20ED04688

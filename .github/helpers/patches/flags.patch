@@ -1,0 +1,11 @@
+--- a/debian/rules
++++ b/debian/rules
+@@ -198,6 +198,8 @@
+	$(confflags_VALGRIND) \
+	$(confflags_TEFLON)
+
++confflags += -Dc_args="$(OPT_FLAGS)" -Dcpp_args="$(OPT_FLAGS)"
++
+
+ rewrite_wrap_files:
+	cp -r subprojects subprojects-save
