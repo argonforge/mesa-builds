@@ -179,6 +179,11 @@ jobs:
         if: always()
         run: ccache -s
 
+      - name: Fix workspace permissions
+        if: always()
+        run: |
+          chown -R 1000:1000 "${{ github.workspace }}" || true
+
   build-i386:
     strategy:
       fail-fast: true
@@ -335,6 +340,11 @@ jobs:
             -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
             -e HOME=/tmp \
             "$IMAGE" ccache -s || true
+
+      - name: Fix workspace permissions
+        if: always()
+        run: |
+          chown -R 1000:1000 "${{ github.workspace }}" || true
 
   publish:
     needs: [build, build-i386]
