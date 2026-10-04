@@ -43,6 +43,7 @@ jobs:
     timeout-minutes: 30
     container:
       image: nafigat0r/devuan:6-dev
+      options: --user 1000:1000
     env:
       OPT_FLAGS: ${{ matrix.flags }}
       CCACHE_DIR: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/.ccache-${{ matrix.ver }}
