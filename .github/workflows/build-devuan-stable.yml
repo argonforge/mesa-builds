@@ -50,8 +50,8 @@ jobs:
       CCACHE_DIR: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/.ccache-${{ matrix.ver }}
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
-      CC: clang
-      CXX: clang++
+      CC: /usr/lib/ccache/clang
+      CXX: /usr/lib/ccache/clang++
     steps:
       - name: Compute version variables
         run: |
@@ -59,6 +59,10 @@ jobs:
           MESA_VERSION="${PACKAGE_VERSION%-*}"
           echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
           echo "MESA_VERSION=$MESA_VERSION" >> $GITHUB_ENV
+
+      - name: Fix workspace ownership
+        if: always()
+        run: chown -R 1000:1000 "/__w/${{ github.event.repository.name }}" || true
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,9 +102,6 @@ jobs:
 
       - name: Patch debian/rules with optimization flags
         run: |
-          # Prepend ccache wrappers to PATH
-          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
-
           cd mesa-${MESA_VERSION}
           patch -p1 < ../.github/helpers/patches/flags.patch
           grep -B 1 '^override_dh_auto_configure:' debian/rules
@@ -186,10 +187,6 @@ jobs:
         if: always()
         run: ccache -s
 
-      - name: Fix workspace ownership
-        if: always()
-        run: chown -R 1000:1000 "/__w/${{ github.event.repository.name }}"
-
   build-i386:
     strategy:
       fail-fast: true
@@ -218,8 +215,12 @@ jobs:
           echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
           echo "MESA_VERSION=$MESA_VERSION" >> $GITHUB_ENV
 
-      - name: Ensure .gitconfig exists
-        run: touch ~/.gitconfig
+      - name: Fix workspace ownership
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            --user 0:0 \
+            "$IMAGE" chown -R $(id -u):$(id -g) /work || true
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -295,13 +296,12 @@ jobs:
             -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
             -e CCACHE_MAXSIZE -e CCACHE_COMPRESS \
             -e OPT_FLAGS \
-            -e CC=clang \
-            -e CXX=clang++ \
+            -e CC=/usr/lib/ccache/clang \
+            -e CXX=/usr/lib/ccache/clang++ \
             -e DEB_BUILD_OPTIONS="noautodbgsym noddebs" \
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
-              export PATH="/usr/lib/ccache:$PATH"
               dh_clean
               rm -rf build obj-*
               dpkg-buildpackage -b -us -uc
@@ -352,6 +352,8 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
+            -e CCACHE_MAXSIZE \
+            -e CCACHE_COMPRESS \
             -e HOME=/tmp \
             "$IMAGE" ccache -s || true
 
