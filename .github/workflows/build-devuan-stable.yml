@@ -50,8 +50,8 @@ jobs:
       CCACHE_DIR: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/.ccache-${{ matrix.ver }}
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
-      CC: /usr/lib/ccache/clang
-      CXX: /usr/lib/ccache/clang++
+      CC: ccache clang
+      CXX: ccache clang++
     steps:
       - name: Compute version variables
         run: |
@@ -296,8 +296,8 @@ jobs:
             -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
             -e CCACHE_MAXSIZE -e CCACHE_COMPRESS \
             -e OPT_FLAGS \
-            -e CC=/usr/lib/ccache/clang \
-            -e CXX=/usr/lib/ccache/clang++ \
+            -e CC="ccache clang" \
+            -e CXX="ccache clang++" \
             -e DEB_BUILD_OPTIONS="noautodbgsym noddebs" \
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
