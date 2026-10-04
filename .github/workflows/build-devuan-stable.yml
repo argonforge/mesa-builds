@@ -43,6 +43,7 @@ jobs:
     timeout-minutes: 30
     container:
       image: nafigat0r/devuan:6-dev
+      options: --user 0:0
     env:
       OPT_FLAGS: ${{ matrix.flags }}
       CCACHE_DIR: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/.ccache-${{ matrix.ver }}
@@ -179,10 +180,9 @@ jobs:
         if: always()
         run: ccache -s
 
-      - name: Fix workspace permissions
+      - name: Fix workspace ownership
         if: always()
-        run: |
-          chown -R 1000:1000 "${{ github.workspace }}" || true
+        run: chown -R 1000:1000 "${{ github.workspace }}"
 
   build-i386:
     strategy:
@@ -229,6 +229,7 @@ jobs:
       - name: Download Mesa source
         run: |
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e DEBIAN_FRONTEND=noninteractive \
             -e HOME=/tmp \
@@ -243,6 +244,7 @@ jobs:
       - name: Patch debian/rules for i386 build
         run: |
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
@@ -254,6 +256,7 @@ jobs:
       - name: Bump package version with ISA suffix
         run: |
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e HOME=/tmp \
             -e DEBEMAIL=postmaster@itvault.info -e DEBFULLNAME="Argon Forge Mesa workflow" \
@@ -278,6 +281,7 @@ jobs:
         run: |
           mkdir -p packages dev-packages
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
             -e CCACHE_MAXSIZE -e CCACHE_COMPRESS \
@@ -336,15 +340,11 @@ jobs:
         if: always()
         run: |
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
             -e HOME=/tmp \
             "$IMAGE" ccache -s || true
-
-      - name: Fix workspace permissions
-        if: always()
-        run: |
-          chown -R 1000:1000 "${{ github.workspace }}" || true
 
   publish:
     needs: [build, build-i386]
