@@ -62,6 +62,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          set-safe-directory: false
 
       - name: Restore ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -119,6 +121,9 @@ jobs:
             echo "ERROR: could not parse current version from debian/changelog"
             exit 1
           fi
+
+          SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
+          export SOURCE_DATE_EPOCH
 
           NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
           echo "Original version: ${CURRENT_VER}"
@@ -218,6 +223,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          set-safe-directory: false
 
       - name: Restore ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -261,6 +268,7 @@ jobs:
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e HOME=/tmp \
             -e DEBEMAIL=postmaster@itvault.info -e DEBFULLNAME="Argon Forge Mesa workflow" \
+            -e SOURCE_DATE_EPOCH="$(dpkg-parsechangelog -S Timestamp)" \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
               if [ ! -f debian/changelog ]; then
