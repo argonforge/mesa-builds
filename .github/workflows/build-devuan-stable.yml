@@ -62,7 +62,7 @@ jobs:
 
       - name: Fix workspace ownership
         if: always()
-        run: chown -R 1000:1000 "/__w/${{ github.event.repository.name }}" || true
+        run: chown -R 0:0 "/__w/${{ github.event.repository.name }}" || true
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
