@@ -182,7 +182,7 @@ jobs:
 
       - name: Fix workspace ownership
         if: always()
-        run: chown -R 1000:1000 "${{ github.workspace }}"
+        run: chown -R 1000:1000 "/__w/${{ github.event.repository.name }}"
 
   build-i386:
     strategy:
