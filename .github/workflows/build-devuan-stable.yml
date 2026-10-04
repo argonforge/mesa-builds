@@ -29,6 +29,7 @@ concurrency:
 
 jobs:
   build:
+    needs: build-i386
     strategy:
       fail-fast: true
       matrix:
