@@ -33,6 +33,9 @@ If the output is empty - **do not install these packages**.
 | `libxatracker2`       | XA tracker (XvBA)                              |
 | `mesa-va-drivers`     | VA-API (hardware video decoding)               |
 | `mesa-vdpau-drivers`  | VDPAU (hardware video decoding)                |
+| `mesa-drm-shim`       | Libraries for testing DRM drivers              |
+| `libd3dadapter9-mesa` | Gallium3D state tracker                        |
+| `mesa-opencl-icd`     | OpenCL library                                 |
 
 Development headers (`*-dev`) are also published in the same repository for users who build against Mesa.
 

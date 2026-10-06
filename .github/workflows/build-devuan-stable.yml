@@ -43,16 +43,14 @@ jobs:
             isa: avx512
     runs-on: self-hosted
     timeout-minutes: 60
-    container:
-      image: nafigat0r/devuan:6-dev
-      options: --user 0:0
     env:
       OPT_FLAGS: ${{ matrix.flags }}
-      CCACHE_DIR: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/.ccache-${{ matrix.ver }}
+      IMAGE: nafigat0r/devuan:6-dev
+      HOST_CCACHE_DIR: "${{ github.workspace }}/.ccache-${{ matrix.ver }}"
+      WORKDIR: /work
+      CCACHE_DIR: "/work/.ccache-${{ matrix.ver }}"
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
-      CC: ccache clang
-      CXX: ccache clang++
     steps:
       - name: Compute version variables
         run: |
@@ -62,8 +60,11 @@ jobs:
           echo "MESA_VERSION=$MESA_VERSION" >> $GITHUB_ENV
 
       - name: Fix workspace ownership
-        if: always()
-        run: chown -R 0:0 "/__w/${{ github.event.repository.name }}" || true
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            --user 0:0 \
+            "$IMAGE" chown -R $(id -u):$(id -g) /work
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,93 +74,107 @@ jobs:
       - name: Restore ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ env.CCACHE_DIR }}
+          path: ${{ env.HOST_CCACHE_DIR }}
           key: ccache-mesa-${{ matrix.ver }}-${{ github.sha }}
           restore-keys: |
             ccache-mesa-${{ matrix.ver }}-
 
-      - name: Configure ccache
-        run: |
-          mkdir -p "$CCACHE_DIR"
-          ccache --max-size="$CCACHE_MAXSIZE"
-          ccache --set-config=compression=true
-          ccache --set-config=compression_level=6
-          ccache -s
-
       - name: Download Mesa source
         run: |
-          rm -rf mesa-${MESA_VERSION}
-          rm -f mesa_${PACKAGE_VERSION}.dsc mesa_${MESA_VERSION}.orig.tar.xz mesa_${PACKAGE_VERSION}.debian.tar.xz
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e HOME=/tmp \
+            -w "${{ env.WORKDIR }}" \
+            "$IMAGE" bash -c '
+              rm -rf mesa-${MESA_VERSION}
+              rm -f mesa_${PACKAGE_VERSION}.dsc mesa_${MESA_VERSION}.orig.tar.xz mesa_${PACKAGE_VERSION}.debian.tar.xz
+              apt update
+              apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
+            '
 
-          apt update
-          apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
-
-      - name: Install build dependencies from control file
+      - name: Patch debian/rules for x64 build
         run: |
-          cd mesa-${MESA_VERSION}
-          mk-build-deps --install --remove \
-            --tool 'apt-get -y --no-install-recommends' \
-            debian/control
-
-      - name: Patch debian/rules with optimization flags
-        run: |
-          cd mesa-${MESA_VERSION}
-          patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
-          grep -B 1 '^override_dh_auto_configure:' debian/rules
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            -e HOME=/tmp \
+            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
+            "$IMAGE" bash -c '
+              patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
+              grep -n "OPT_FLAGS" debian/rules
+            '
 
       - name: Bump package version with ISA suffix
-        working-directory: mesa-${{ env.MESA_VERSION }}
-        env:
-          DEBEMAIL: postmaster@itvault.info
-          DEBFULLNAME: Argon Forge Mesa workflow
         run: |
-          if [ ! -f debian/changelog ]; then
-            echo "ERROR: debian/changelog not found in $(pwd)"
-            exit 1
-          fi
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            -e HOME=/tmp \
+            -e DEBEMAIL=postmaster@itvault.info -e DEBFULLNAME="Argon Forge Mesa workflow" \
+            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
+            "$IMAGE" bash -c '
+              if [ ! -f debian/changelog ]; then
+                echo "ERROR: debian/changelog not found"
+                exit 1
+              fi
 
-          CURRENT_VER=$(dpkg-parsechangelog -S Version)
-          if [ -z "$CURRENT_VER" ]; then
-            echo "ERROR: could not parse current version from debian/changelog"
-            exit 1
-          fi
+              CURRENT_VER=$(dpkg-parsechangelog -S Version)
+              if [ -z "$CURRENT_VER" ]; then
+                echo "ERROR: could not parse version"
+                exit 1
+              fi
 
-          export SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
+              export SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
 
-          NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
-          echo "Original version: ${CURRENT_VER}"
-          echo "New version: ${NEW_VER}"
-          dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations"
+              NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
+              echo "Original version: ${CURRENT_VER}"
+              echo "New version: ${NEW_VER}"
+              dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations"
+            '
 
-      - name: Build .deb packages
+      - name: Build x64 .deb packages
         run: |
-          mkdir -p packages
-          mkdir -p dev-packages
-          cd mesa-${MESA_VERSION}
-          dh_clean
-          rm -rf build obj-*
-          # noautodbgsym - don't make dbgsym-packages
-          # noddebs - don't make .ddeb
-          export DEB_BUILD_OPTIONS="noautodbgsym noddebs"
-          dpkg-buildpackage -b -us -uc
-          # copy packages
-          find .. -maxdepth 1 \
-            -name '*.deb' \
-            ! -name '*dbgsym*' \
-            ! -name '*ddeb*' \
-            ! -name '*-dev_*' \
-            -exec mv {} ../packages/ \;
-          # copy dev-packages
-          find .. -maxdepth 1 \
-            -name '*-dev_*.deb' \
-            ! -name '*dbgsym*' \
-            ! -name '*ddeb*' \
-            -exec mv {} ../dev-packages/ \;
+          mkdir -p packages dev-packages
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
+            -e CCACHE_MAXSIZE -e CCACHE_COMPRESS \
+            -e OPT_FLAGS \
+            -e CC="ccache clang" \
+            -e CXX="ccache clang++" \
+            -e DEB_BUILD_OPTIONS="noautodbgsym noddebs" \
+            -e HOME=/tmp \
+            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
+            "$IMAGE" bash -c '
+              dh_clean
+              rm -rf build obj-*
+              dpkg-buildpackage -b -us -uc
+              find .. -maxdepth 1 \
+                -name '*.deb' \
+                ! -name '*dbgsym*' \
+                ! -name '*ddeb*' \
+                ! -name '*-dev_*' \
+                -exec mv {} ../packages/ \;
+              find .. -maxdepth 1 \
+                -name '*-dev_*.deb' \
+                ! -name '*dbgsym*' \
+                ! -name '*ddeb*' \
+                -exec mv {} ../dev-packages/ \;
+            '
 
       - name: Verify no dbgsym packages
         run: |
           if [ -z "$(ls -A packages/ 2>/dev/null)" ]; then
             echo "ERROR: packages/ is empty - dpkg-buildpackage produced no .deb"
+            ls -lh ../*.deb 2>/dev/null || echo "no .deb files in parent"
+            exit 1
+          fi
+
+          if [ -z "$(ls -A dev-packages/ 2>/dev/null)" ]; then
+            echo "ERROR: dev-packages/ is empty"
             exit 1
           fi
 
@@ -185,7 +200,15 @@ jobs:
 
       - name: Show ccache stats
         if: always()
-        run: ccache -s
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
+            -e CCACHE_MAXSIZE \
+            -e CCACHE_COMPRESS \
+            -e HOME=/tmp \
+            "$IMAGE" ccache -s || true
 
   build-i386:
     strategy:
@@ -201,10 +224,11 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 40
     env:
-      IMAGE: nafigat0r/devuan:6-dev-i386
-      WORKDIR: /work
       OPT_FLAGS: ${{ matrix.flags }}
-      CCACHE_DIR: ${{ github.workspace }}/.ccache-i386-${{ matrix.ver }}
+      IMAGE: nafigat0r/devuan:6-dev-i386
+      HOST_CCACHE_DIR: "${{ github.workspace }}/.ccache-i386-${{ matrix.ver }}"
+      WORKDIR: /work
+      CCACHE_DIR: "/work/.ccache-i386-${{ matrix.ver }}"
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
     steps:
@@ -218,7 +242,7 @@ jobs:
       - name: Fix workspace ownership
         run: |
           docker run --rm \
-            -v "${{ github.workspace }}:/work" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             --user 0:0 \
             "$IMAGE" chown -R $(id -u):$(id -g) /work
 
@@ -230,7 +254,7 @@ jobs:
       - name: Restore ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ env.CCACHE_DIR }}
+          path: ${{ env.HOST_CCACHE_DIR }}
           key: ccache-mesa-i386-${{ matrix.ver }}-${{ github.sha }}
           restore-keys: |
             ccache-mesa-i386-${{ matrix.ver }}-
@@ -259,7 +283,7 @@ jobs:
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
               patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
-              grep -n "OPT_FLAGS\|gallium-rusticl\|gallium-opencl" debian/rules
+              grep -n "OPT_FLAGS" debian/rules
             '
 
       - name: Bump package version with ISA suffix
@@ -269,16 +293,17 @@ jobs:
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e HOME=/tmp \
             -e DEBEMAIL=postmaster@itvault.info -e DEBFULLNAME="Argon Forge Mesa workflow" \
-            -e SOURCE_DATE_EPOCH="$(dpkg-parsechangelog -S Timestamp)" \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
               if [ ! -f debian/changelog ]; then
-                echo "ERROR: debian/changelog not found"; exit 1;
+                echo "ERROR: debian/changelog not found"
+                exit 1
               fi
 
               CURRENT_VER=$(dpkg-parsechangelog -S Version)
               if [ -z "$CURRENT_VER" ]; then
-                echo "ERROR: could not parse version"; exit 1;
+                echo "ERROR: could not parse version"
+                exit 1
               fi
 
               export SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
@@ -286,7 +311,7 @@ jobs:
               NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
               echo "Original version: ${CURRENT_VER}"
               echo "New version: ${NEW_VER}"
-              dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations for i386"
+              dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations"
             '
 
       - name: Build i386 .deb packages
@@ -295,7 +320,7 @@ jobs:
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
+            -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
             -e CCACHE_MAXSIZE -e CCACHE_COMPRESS \
             -e OPT_FLAGS \
             -e CC="ccache clang" \
@@ -327,6 +352,12 @@ jobs:
             ls -lh ../*.deb 2>/dev/null || echo "no .deb files in parent"
             exit 1
           fi
+
+          if [ -z "$(ls -A dev-packages/ 2>/dev/null)" ]; then
+            echo "ERROR: dev-packages/ is empty"
+            exit 1
+          fi
+
           if ls packages/*dbgsym* packages/*ddeb* dev-packages/*dbgsym* dev-packages/*ddeb* 2>/dev/null; then
             echo "ERROR: dbgsym/ddeb packages found!"
             exit 1
@@ -353,7 +384,7 @@ jobs:
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e CCACHE_DIR="${{ env.WORKDIR }}/.ccache-i386-${{ matrix.ver }}" \
+            -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
             -e CCACHE_MAXSIZE \
             -e CCACHE_COMPRESS \
             -e HOME=/tmp \
@@ -361,6 +392,7 @@ jobs:
 
   publish:
     needs: [build, build-i386]
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -429,18 +461,15 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
         with:
           path: apt-repo
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
-        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
 
   release:
     needs: [build, build-i386]
@@ -473,6 +502,8 @@ jobs:
           ls -lh artifacts/
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            [[ $DRAFT = true ]] && gh run cancel
+
             echo "Release $TAG already exists - uploading files"
             gh release upload "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
