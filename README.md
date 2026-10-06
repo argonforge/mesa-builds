@@ -21,18 +21,18 @@ If the output is empty - **do not install these packages**.
 <details>
 <summary>Package list</summary>
 
-| Package               | Purpose                               |
-|-----------------------|---------------------------------------|
-| `mesa-libgallium`     | Main Gallium library (radeonsi, RADV) |
-| `mesa-vulkan-drivers` | Vulkan drivers (RADV for AMD)         |
-| `libgl1-mesa-dri`     | DRI drivers for OpenGL                |
-| `libglx-mesa0`        | GLX library                           |
-| `libegl-mesa0`        | EGL library                           |
-| `libgbm1`             | GBM (buffers for Wayland/KMS)         |
-| `libosmesa6`          | Offscreen rendering                   |
-| `libxatracker2`       | XA tracker (XvBA)                     |
-| `mesa-va-drivers`     | VA-API (hardware video decoding)      |
-| `mesa-vdpau-drivers`  | VDPAU (hardware video decoding)       |
+| Package               | Purpose                                        |
+|-----------------------|------------------------------------------------|
+| `mesa-libgallium`     | Main Gallium library (radeonsi, llvmpipe, ...) |
+| `mesa-vulkan-drivers` | Vulkan drivers (RADV for AMD)                  |
+| `libgl1-mesa-dri`     | DRI drivers for OpenGL                         |
+| `libglx-mesa0`        | GLX library                                    |
+| `libegl-mesa0`        | EGL library                                    |
+| `libgbm1`             | GBM (buffers for Wayland/KMS)                  |
+| `libosmesa6`          | Offscreen rendering                            |
+| `libxatracker2`       | XA tracker (XvBA)                              |
+| `mesa-va-drivers`     | VA-API (hardware video decoding)               |
+| `mesa-vdpau-drivers`  | VDPAU (hardware video decoding)                |
 
 Development headers (`*-dev`) are also published in the same repository for users who build against Mesa.
 

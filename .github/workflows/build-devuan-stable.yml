@@ -29,6 +29,7 @@ concurrency:
 
 jobs:
   build:
+    # Single runner, so run after build i386. Do not parallelize
     needs: build-i386
     strategy:
       fail-fast: true
@@ -41,7 +42,7 @@ jobs:
             flags: -march=x86-64-v4 -mtune=znver4 ${{ vars.FLAGS }}
             isa: avx512
     runs-on: self-hosted
-    timeout-minutes: 30
+    timeout-minutes: 60
     container:
       image: nafigat0r/devuan:6-dev
       options: --user 0:0
@@ -103,7 +104,7 @@ jobs:
       - name: Patch debian/rules with optimization flags
         run: |
           cd mesa-${MESA_VERSION}
-          patch -p1 < ../.github/helpers/patches/flags.patch
+          patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
           grep -B 1 '^override_dh_auto_configure:' debian/rules
 
       - name: Bump package version with ISA suffix
@@ -123,8 +124,7 @@ jobs:
             exit 1
           fi
 
-          SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
-          export SOURCE_DATE_EPOCH
+          export SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
 
           NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
           echo "Original version: ${CURRENT_VER}"
@@ -220,7 +220,7 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}:/work" \
             --user 0:0 \
-            "$IMAGE" chown -R $(id -u):$(id -g) /work || true
+            "$IMAGE" chown -R $(id -u):$(id -g) /work
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -258,7 +258,7 @@ jobs:
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
-              patch -p1 < ../.github/helpers/patches/flags.patch
+              patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
               grep -n "OPT_FLAGS\|gallium-rusticl\|gallium-opencl" debian/rules
             '
 
@@ -280,6 +280,8 @@ jobs:
               if [ -z "$CURRENT_VER" ]; then
                 echo "ERROR: could not parse version"; exit 1;
               fi
+
+              export SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
 
               NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
               echo "Original version: ${CURRENT_VER}"
@@ -359,7 +361,6 @@ jobs:
 
   publish:
     needs: [build, build-i386]
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -428,15 +429,18 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
         with:
           path: apt-repo
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.draft }}
 
   release:
     needs: [build, build-i386]
