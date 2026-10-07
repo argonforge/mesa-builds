@@ -2,7 +2,7 @@
 
 download_bash_helpers() {
 	printf "Installing bash-helpers\n"
-	[[ ! -d /usr/local/lib/bash/includes ]] || sudo mkdir -p /usr/local/lib/bash/includes
+	[[ -d /usr/local/lib/bash/includes ]] || sudo mkdir -p /usr/local/lib/bash/includes
 
 	sudo curl -so /usr/local/lib/bash/includes/bash-helpers.sh https://raw.githubusercontent.com/nafigator/bash-helpers/master/src/bash-helpers.sh
 	sudo chmod +x /usr/local/lib/bash/includes/bash-helpers.sh
@@ -27,5 +27,9 @@ init_bash_helpers || exit 1
 # shellcheck disable=SC2034
 INTERACTIVE=1
 
-typos
+REPO_ROOT=$(git rev-parse --show-toplevel)
+status "REPO_ROOT: $REPO_ROOT" $? || exit 1
+
+# check typos
+typos --config "$REPO_ROOT/.typos.toml" "$REPO_ROOT"
 status 'Typos check' $?

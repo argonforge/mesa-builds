@@ -4,7 +4,9 @@
 .PHONY: hook
 hook: #? Setup git hooks
 	$(info Git hooks setup...)
-	git config --local core.hooksPath "$(CURDIR)/.githooks"
+	@git config --local core.hooksPath "$(CURDIR)/.githooks"
+	@chmod 0750 -R $(CURDIR)/.githooks/*
+	@echo Setup complete
 
 .PHONY: help
 help: #? Show this message
