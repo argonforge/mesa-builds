@@ -27,8 +27,7 @@ init_bash_helpers || exit 1
 # shellcheck disable=SC2034
 INTERACTIVE=1
 
-REPO_ROOT=$(git rev-parse --show-toplevel)
-status "REPO_ROOT: $REPO_ROOT" $? || exit 1
+REPO_ROOT=$(git rev-parse --show-toplevel) || exit 1
 
 # check typos
 typos --config "$REPO_ROOT/.typos.toml" "$REPO_ROOT"
