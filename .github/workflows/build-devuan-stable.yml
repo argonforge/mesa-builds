@@ -51,6 +51,7 @@ jobs:
       CCACHE_DIR: "/work/.ccache-${{ matrix.ver }}"
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
+      CCACHE_COMPRESSLEVEL: '6'
     steps:
       - name: Compute version variables
         run: |
@@ -141,11 +142,13 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
-            -e CCACHE_MAXSIZE -e CCACHE_COMPRESS \
+            -e CCACHE_MAXSIZE \
+            -e CCACHE_COMPRESS \
+            -e CCACHE_COMPRESSLEVEL \
             -e OPT_FLAGS \
             -e CC="ccache clang" \
             -e CXX="ccache clang++" \
-            -e DEB_BUILD_OPTIONS="noautodbgsym noddebs" \
+            -e DEB_BUILD_OPTIONS="noautodbgsym noddebs parallel=$(nproc)" \
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
@@ -207,6 +210,7 @@ jobs:
             -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
             -e CCACHE_MAXSIZE \
             -e CCACHE_COMPRESS \
+            -e CCACHE_COMPRESSLEVEL \
             -e HOME=/tmp \
             "$IMAGE" ccache -s || true
 
@@ -231,6 +235,7 @@ jobs:
       CCACHE_DIR: "/work/.ccache-i386-${{ matrix.ver }}"
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
+      CCACHE_COMPRESSLEVEL: '6'
     steps:
       - name: Compute version variables
         run: |
@@ -321,11 +326,13 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
-            -e CCACHE_MAXSIZE -e CCACHE_COMPRESS \
+            -e CCACHE_MAXSIZE \
+            -e CCACHE_COMPRESS \
+            -e CCACHE_COMPRESSLEVEL \
             -e OPT_FLAGS \
             -e CC="ccache clang" \
             -e CXX="ccache clang++" \
-            -e DEB_BUILD_OPTIONS="noautodbgsym noddebs" \
+            -e DEB_BUILD_OPTIONS="noautodbgsym noddebs parallel=$(nproc)" \
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
@@ -387,6 +394,7 @@ jobs:
             -e CCACHE_DIR="${{ env.CCACHE_DIR }}" \
             -e CCACHE_MAXSIZE \
             -e CCACHE_COMPRESS \
+            -e CCACHE_COMPRESSLEVEL \
             -e HOME=/tmp \
             "$IMAGE" ccache -s || true
 
@@ -400,7 +408,7 @@ jobs:
       pages: write
       id-token: write
     environment:
-      name: github-pages
+      name: apt-repository
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
@@ -502,7 +510,7 @@ jobs:
           ls -lh artifacts/
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            [[ $DRAFT = true ]] && gh run cancel
+            [[ $DRAFT = true ]] && exit 0
 
             echo "Release $TAG already exists - uploading files"
             gh release upload "$TAG" \
