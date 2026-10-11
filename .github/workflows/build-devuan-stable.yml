@@ -91,7 +91,7 @@ jobs:
             "$IMAGE" bash -c '
               rm -rf mesa-${MESA_VERSION}
               rm -f mesa_${PACKAGE_VERSION}.dsc mesa_${MESA_VERSION}.orig.tar.xz mesa_${PACKAGE_VERSION}.debian.tar.xz
-              apt update
+              sudo apt update
               apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
             '
 
@@ -275,7 +275,7 @@ jobs:
             "$IMAGE" bash -c '
               rm -rf mesa-${MESA_VERSION}
               rm -f mesa_${PACKAGE_VERSION}.dsc mesa_${MESA_VERSION}.orig.tar.xz mesa_${PACKAGE_VERSION}.debian.tar.xz
-              apt update
+              sudo apt update
               apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
             '
 
