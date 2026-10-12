@@ -103,7 +103,14 @@ jobs:
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
+              python3 ../.github/helpers/fix_clc_llvm22.py src/compiler/clc/clc_helpers.cpp
+              python3 ../.github/helpers/fix_ac_llvm_llvm22.py src/amd/llvm/ac_llvm_helper.cpp
               patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
+              sed -i '\''\|^etc/OpenCL/vendors/mesa\.icd$|d'\'' debian/mesa-opencl-icd.install
+              sed -i '\''\|^usr/lib/\*/libMesaOpenCL\*$|d'\'' debian/mesa-opencl-icd.install
+              if ! grep -q '\''^override_dh_shlibdeps:'\'' debian/rules; then
+                printf "\noverride_dh_shlibdeps:\n\tdh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info\n" >> debian/rules
+              fi
               grep -n "OPT_FLAGS" debian/rules
             '
 
@@ -152,6 +159,12 @@ jobs:
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
+              export PATH="/usr/lib/llvm-22/bin:$PATH"
+
+              # Regenerate debian/control from control.in with LLVM_VERSION=22.
+              # dh_clean alone does not trigger override_dh_clean -> regen_control.
+              debian/rules regen_control
+
               dh_clean
               rm -rf build obj-*
               dpkg-buildpackage -b -us -uc
@@ -287,7 +300,14 @@ jobs:
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
+              python3 ../.github/helpers/fix_clc_llvm22.py src/compiler/clc/clc_helpers.cpp
+              python3 ../.github/helpers/fix_ac_llvm_llvm22.py src/amd/llvm/ac_llvm_helper.cpp
               patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
+              sed -i '\''\|^etc/OpenCL/vendors/mesa\.icd$|d'\'' debian/mesa-opencl-icd.install
+              sed -i '\''\|^usr/lib/\*/libMesaOpenCL\*$|d'\'' debian/mesa-opencl-icd.install
+              if ! grep -q '\''^override_dh_shlibdeps:'\'' debian/rules; then
+                printf "\noverride_dh_shlibdeps:\n\tdh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info\n" >> debian/rules
+              fi
               grep -n "OPT_FLAGS" debian/rules
             '
 
@@ -336,6 +356,12 @@ jobs:
             -e HOME=/tmp \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
+              export PATH="/usr/lib/llvm-22/bin:$PATH"
+
+              # Regenerate debian/control from control.in with LLVM_VERSION=22.
+              # dh_clean alone does not trigger override_dh_clean -> regen_control.
+              debian/rules regen_control
+
               dh_clean
               rm -rf build obj-*
               dpkg-buildpackage -b -us -uc
