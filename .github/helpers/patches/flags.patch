@@ -1,11 +1,36 @@
 --- a/debian/rules
 +++ b/debian/rules
-@@ -198,6 +198,8 @@
+@@ -13,7 +13,7 @@
+ DEB_HOST_ARCH_CPU  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_CPU)
+
+ # for finding the correct llvm-config when meson doesn't know about it yet
+-LLVM_VERSION = 19
++LLVM_VERSION = 22
+ export PATH:=/usr/lib/llvm-$(LLVM_VERSION)/bin/:$(PATH)
+
+ export DEB_BUILD_MAINT_OPTIONS=optimize=-lto
+@@ -124,7 +124,7 @@
+
+	VULKAN_LAYERS += device-select intel-nullhw overlay
+	confflags_GALLIUM += -Dllvm=enabled
+-	confflags_GALLIUM += -Dgallium-opencl=icd
++	confflags_GALLIUM += -Dgallium-opencl=disabled
+
+	# Build rusticl for archs where rustc is available
+	ifneq (,$(filter $(DEB_HOST_ARCH), $(RUSTICL_ARCHS)))
+@@ -198,6 +198,7 @@
 	$(confflags_VALGRIND) \
 	$(confflags_TEFLON)
 
 +confflags += -Dc_args="$(OPT_FLAGS)" -Dcpp_args="$(OPT_FLAGS)"
-+
 
  rewrite_wrap_files:
 	cp -r subprojects subprojects-save
+@@ -320,4 +321,6 @@
+	    -e"s,@NVK_ARCHS@,$(NVK_ARCHS),g" \
+	    -e"s,@VALGRIND_ARCHS@,$(VALGRIND_ARCHS),g" \
+	    -e"s,@WINE_ARCHS@,$(WINE_ARCHS),g" \
+-	    debian/control.in > debian/control
++	    debian/control.in \
++	  | grep -vE '(libllvmspirvlib-[0-9]+|llvm-spirv-[0-9]+)' \
++	  > debian/control
