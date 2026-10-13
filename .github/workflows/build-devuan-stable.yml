@@ -508,9 +508,13 @@ jobs:
           [[ $DRAFT = true ]] && TITLE="[DRAFT] $TITLE"
 
           ls -lh artifacts/
+          echo "Flags: {{ vars.FLAGS }}"
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            [[ $DRAFT = true ]] && exit 0
+            [[ $DRAFT = true ]] && {
+              echo "Draft release. Skip artifacts update."
+              exit 0
+            }
 
             echo "Release $TAG already exists - uploading files"
             gh release upload "$TAG" \
