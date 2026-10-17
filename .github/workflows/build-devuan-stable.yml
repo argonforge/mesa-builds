@@ -508,7 +508,7 @@ jobs:
           [[ $DRAFT = true ]] && TITLE="[DRAFT] $TITLE"
 
           ls -lh artifacts/
-          echo "Flags: {{ vars.FLAGS }}"
+          echo "Flags: ${{ vars.FLAGS }}"
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             [[ $DRAFT = true ]] && {
