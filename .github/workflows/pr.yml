@@ -20,7 +20,7 @@ jobs:
       - name: Checkout Actions Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Spell Check Repo
-        uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
+        uses: crate-ci/typos@4c8b7f51ca60df14e3c5ca82770dfbbe6c3dae85 # v1.52.0
 
   commit-me:
     name: Conventional Commits Compliance
@@ -31,7 +31,7 @@ jobs:
       # Enable colored output in GitHub Actions
       FORCE_COLOR: 3
     steps:
-      - uses: dev-build-deploy/commit-me@27d14296ec218488c543616d9128d7e75ab7463a # v1.5.3
+      - uses: dev-build-deploy/commit-me@d514fec15ea83c0643013c801a375893eb51a433 # v2.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}  # Required to retrieve the commits associated with your Pull Request
           include-commits: true  # OPTIONAL; forces the inclusion of commits associated with your Pull Request
