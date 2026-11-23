@@ -113,7 +113,6 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e HOME=/tmp \
-            -e DEBEMAIL=postmaster@itvault.info -e DEBFULLNAME="Argon Forge Mesa workflow" \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
               if [ ! -f debian/changelog ]; then
@@ -297,7 +296,6 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
             -e HOME=/tmp \
-            -e DEBEMAIL=postmaster@itvault.info -e DEBFULLNAME="Argon Forge Mesa workflow" \
             -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
             "$IMAGE" bash -c '
               if [ ! -f debian/changelog ]; then
