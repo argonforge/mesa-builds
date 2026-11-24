@@ -1,11 +1,18 @@
 --- a/debian/rules
 +++ b/debian/rules
-@@ -198,6 +198,8 @@
+@@ -198,6 +198,15 @@
 	$(confflags_VALGRIND) \
 	$(confflags_TEFLON)
 
 +confflags += -Dc_args="$(OPT_FLAGS)" -Dcpp_args="$(OPT_FLAGS)"
 +
++DEB_VERSION := $(shell dpkg-parsechangelog -S Version)
++ifneq ($(ISA_SUFFIX),)
++DEB_VERSION := $(DEB_VERSION)+$(ISA_SUFFIX)
++endif
++
++override_dh_gencontrol:
++	dh_gencontrol -- -v$(DEB_VERSION)
 
  rewrite_wrap_files:
 	cp -r subprojects subprojects-save

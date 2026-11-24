@@ -28,11 +28,90 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    runs-on: self-hosted
+    timeout-minutes: 50
+    env:
+      IMAGE: nafigat0r/devuan:6-dev
+      WORKDIR: /work
+    steps:
+      - name: Compute version variables
+        run: |
+          PACKAGE_VERSION="${TAG#v}"
+          MESA_VERSION="${PACKAGE_VERSION%-*}"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "MESA_VERSION=$MESA_VERSION" >> $GITHUB_ENV
+
+      - name: Fix workspace ownership
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            --user 0:0 \
+            "$IMAGE" chown -R $(id -u):$(id -g) /work
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          set-safe-directory: false
+
+      - name: Download Mesa source
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e HOME=/tmp \
+            -w "${{ env.WORKDIR }}" \
+            "$IMAGE" bash -c '
+              rm -rf mesa-${MESA_VERSION}
+              rm -f mesa_${PACKAGE_VERSION}.dsc mesa_${MESA_VERSION}.orig.tar.xz mesa_${PACKAGE_VERSION}.debian.tar.xz
+              sudo apt update
+
+              pause=60
+              for i in 1 2 3 4 5; do
+                pause=$(($pause * $i))
+                if apt source mesa-vulkan-drivers=${PACKAGE_VERSION}; then
+                  break
+                fi
+                if [ "$i" -eq 5 ]; then
+                  echo "ERROR: apt source failed after 5 attempts"
+                  exit 1
+                fi
+                echo "apt source failed (attempt $i/5), retrying in ${pause}s..."
+                sleep $pause
+              done
+            '
+
+      - name: Patch debian/rules
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
+            -e HOME=/tmp \
+            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
+            "$IMAGE" bash -c '
+              patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
+              grep -n "OPT_FLAGS" debian/rules
+              grep -n "ISA_SUFFIX" debian/rules
+            '
+
+      - name: Archive patched source
+        run: |
+          tar -caf "mesa-source-${MESA_VERSION}.tar.zst" "mesa-${MESA_VERSION}"
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mesa-source
+          path: mesa-source-${{ env.MESA_VERSION }}.tar.zst
+          retention-days: 1
+
   build:
-    # Single runner, so run after build i386. Do not parallelize
+    # Single runner, so run after build i386. Do not parallelize.
     needs: build-i386
     strategy:
       fail-fast: true
+      max-parallel: 1
       matrix:
         include:
           - ver: v3
@@ -81,32 +160,16 @@ jobs:
           restore-keys: |
             ccache-mesa-${{ matrix.ver }}-
 
-      - name: Download Mesa source
-        run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e DEBIAN_FRONTEND=noninteractive \
-            -e HOME=/tmp \
-            -w "${{ env.WORKDIR }}" \
-            "$IMAGE" bash -c '
-              rm -rf mesa-${MESA_VERSION}
-              rm -f mesa_${PACKAGE_VERSION}.dsc mesa_${MESA_VERSION}.orig.tar.xz mesa_${PACKAGE_VERSION}.debian.tar.xz
-              sudo apt update
-              apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
-            '
+      - name: Download source artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mesa-source
+          path: .
 
-      - name: Patch debian/rules for x64 build
+      - name: Extract source artifact
         run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e HOME=/tmp \
-            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
-            "$IMAGE" bash -c '
-              patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
-              grep -n "OPT_FLAGS" debian/rules
-            '
+          tar --zstd -xf "mesa-source-${MESA_VERSION}.tar.zst"
+          ls -ld "mesa-${MESA_VERSION}"
 
       - name: Build x64 .deb packages
         run: |
@@ -189,8 +252,10 @@ jobs:
             "$IMAGE" ccache -s || true
 
   build-i386:
+    needs: prepare
     strategy:
       fail-fast: true
+      max-parallel: 1
       matrix:
         include:
           - ver: v3
@@ -239,32 +304,16 @@ jobs:
           restore-keys: |
             ccache-mesa-i386-${{ matrix.ver }}-
 
-      - name: Download Mesa source
-        run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e DEBIAN_FRONTEND=noninteractive \
-            -e HOME=/tmp \
-            -w "${{ env.WORKDIR }}" \
-            "$IMAGE" bash -c '
-              rm -rf mesa-${MESA_VERSION}
-              rm -f mesa_${PACKAGE_VERSION}.dsc mesa_${MESA_VERSION}.orig.tar.xz mesa_${PACKAGE_VERSION}.debian.tar.xz
-              sudo apt update
-              apt source mesa-vulkan-drivers=${PACKAGE_VERSION}
-            '
+      - name: Download source artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mesa-source
+          path: .
 
-      - name: Patch debian/rules for i386 build
+      - name: Extract source artifact
         run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e HOME=/tmp \
-            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
-            "$IMAGE" bash -c '
-              patch -p1 --fuzz=0 < ../.github/helpers/patches/flags.patch
-              grep -n "OPT_FLAGS" debian/rules
-            '
+          tar --zstd -xf "mesa-source-${MESA_VERSION}.tar.zst"
+          ls -ld "mesa-${MESA_VERSION}"
 
       - name: Build i386 .deb packages
         run: |
@@ -358,14 +407,18 @@ jobs:
     environment:
       name: apt-repository
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      # Serialize repository writes across releases
+      group: apt-repo-publish
+      cancel-in-progress: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install reprepro and gnupg
+      - name: Install reprepro, gnupg and zstd
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends reprepro gnupg
+          sudo apt-get install -y --no-install-recommends reprepro gnupg zstd
 
       - name: Download artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -376,7 +429,8 @@ jobs:
       - name: Unpack deb files
         run: |
           mkdir -p build
-          for f in artifacts/*.tar.zst; do
+          shopt -s nullglob
+          for f in artifacts/mesa-v*.tar.zst; do
             echo "Extracting $f"
             tar --zstd -xf "$f" -C build --strip-components=1
           done
@@ -410,6 +464,13 @@ jobs:
 
           echo "--- Repository structure ---"
           find apt-repo -type f | sort
+
+          count=$(find apt-repo/pool -name '*.deb' -type f | wc -l)
+          echo "Imported .deb packages: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "ERROR: no .deb packages were imported into apt-repo"
+            exit 1
+          fi
 
           echo "--- Export public key ---"
           gpg --armor --export > apt-repo/public.asc
@@ -455,6 +516,14 @@ jobs:
           TITLE="${MESA_VERSION} (Clang)"
           [[ $DRAFT = true ]] && TITLE="[DRAFT] $TITLE"
 
+          shopt -s nullglob
+          FILES=(artifacts/mesa-v*.tar.zst)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "ERROR: no mesa-v*.tar.zst files found in artifacts/"
+            ls -lh artifacts/
+            exit 1
+          fi
+
           ls -lh artifacts/
           echo "Flags: ${{ vars.FLAGS }}"
 
@@ -468,7 +537,7 @@ jobs:
             gh release upload "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber \
-              artifacts/*.zst
+              "${FILES[@]}"
           else
             echo "Creating release $TAG"
             gh release create "$TAG" \
@@ -477,5 +546,5 @@ jobs:
               --title "$TITLE" \
               --notes-file .github/release-notes.md \
               "${FLAGS[@]}" \
-              artifacts/*.zst
+              "${FILES[@]}"
           fi
