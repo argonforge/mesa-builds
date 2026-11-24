@@ -45,6 +45,7 @@ jobs:
     timeout-minutes: 60
     env:
       OPT_FLAGS: ${{ matrix.flags }}
+      ISA_SUFFIX: ${{ matrix.isa }}
       IMAGE: nafigat0r/devuan:6-dev
       HOST_CCACHE_DIR: "${{ github.workspace }}/.ccache-${{ matrix.ver }}"
       WORKDIR: /work
@@ -107,33 +108,6 @@ jobs:
               grep -n "OPT_FLAGS" debian/rules
             '
 
-      - name: Bump package version with ISA suffix
-        run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e HOME=/tmp \
-            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
-            "$IMAGE" bash -c '
-              if [ ! -f debian/changelog ]; then
-                echo "ERROR: debian/changelog not found"
-                exit 1
-              fi
-
-              CURRENT_VER=$(dpkg-parsechangelog -S Version)
-              if [ -z "$CURRENT_VER" ]; then
-                echo "ERROR: could not parse version"
-                exit 1
-              fi
-
-              export SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
-
-              NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
-              echo "Original version: ${CURRENT_VER}"
-              echo "New version: ${NEW_VER}"
-              dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations"
-            '
-
       - name: Build x64 .deb packages
         run: |
           mkdir -p packages dev-packages
@@ -145,6 +119,7 @@ jobs:
             -e CCACHE_COMPRESS \
             -e CCACHE_COMPRESSLEVEL \
             -e OPT_FLAGS \
+            -e ISA_SUFFIX \
             -e CC="ccache clang" \
             -e CXX="ccache clang++" \
             -e DEB_BUILD_OPTIONS="noautodbgsym noddebs parallel=$(nproc)" \
@@ -228,6 +203,7 @@ jobs:
     timeout-minutes: 40
     env:
       OPT_FLAGS: ${{ matrix.flags }}
+      ISA_SUFFIX: ${{ matrix.isa }}
       IMAGE: nafigat0r/devuan:6-dev-i386
       HOST_CCACHE_DIR: "${{ github.workspace }}/.ccache-i386-${{ matrix.ver }}"
       WORKDIR: /work
@@ -290,33 +266,6 @@ jobs:
               grep -n "OPT_FLAGS" debian/rules
             '
 
-      - name: Bump package version with ISA suffix
-        run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -v "${{ github.workspace }}:${{ env.WORKDIR }}" \
-            -e HOME=/tmp \
-            -w "${{ env.WORKDIR }}/mesa-${MESA_VERSION}" \
-            "$IMAGE" bash -c '
-              if [ ! -f debian/changelog ]; then
-                echo "ERROR: debian/changelog not found"
-                exit 1
-              fi
-
-              CURRENT_VER=$(dpkg-parsechangelog -S Version)
-              if [ -z "$CURRENT_VER" ]; then
-                echo "ERROR: could not parse version"
-                exit 1
-              fi
-
-              export SOURCE_DATE_EPOCH=$(dpkg-parsechangelog -S Timestamp)
-
-              NEW_VER="${CURRENT_VER}+${{ matrix.isa }}"
-              echo "Original version: ${CURRENT_VER}"
-              echo "New version: ${NEW_VER}"
-              dch --newversion "$NEW_VER" "Rebuild with ${{ matrix.isa }} optimizations"
-            '
-
       - name: Build i386 .deb packages
         run: |
           mkdir -p packages dev-packages
@@ -328,6 +277,7 @@ jobs:
             -e CCACHE_COMPRESS \
             -e CCACHE_COMPRESSLEVEL \
             -e OPT_FLAGS \
+            -e ISA_SUFFIX \
             -e CC="ccache clang" \
             -e CXX="ccache clang++" \
             -e DEB_BUILD_OPTIONS="noautodbgsym noddebs parallel=$(nproc)" \
